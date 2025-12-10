@@ -4,6 +4,7 @@ from datetime import datetime
 from config.settings import APPLICATION_CHANNEL_ID
 from utils.storage import get_next_app_id, add_application
 from utils.logger import send_log
+from utils.role_manager import set_applicant_nickname, give_applicant_role
 
 
 class FamilyApplicationModal(discord.ui.Modal, title='Заявка в семью'):
@@ -80,10 +81,13 @@ class FamilyApplicationModal(discord.ui.Modal, title='Заявка в семью
             f'✅ Ваша заявка #{app_id} успешно отправлена! Ожидайте рассмотрения.',
             ephemeral=True
         )
+
+        # Выдача роли заявителя
+        await give_applicant_role(interaction.user)
         
         # Лог
         await send_log(
             interaction.guild,
-            f'📋 **Новая заявка #{app_id}**\nПользователь: {interaction.user.mention} ({interaction.user.id})\nИмя: {self.full_name.value}\nOOC: {self.ooc_name.value}',
+            f'📋 **Новая заявка #{app_id}**\nПользователь: {interaction.user.mention} ({interaction.user.id})\nИмя: {self.full_name.value}\nOOC: {self.ooc_name.value}\nНикнейм изменен на: {self.full_name.value} | {self.ooc_name.value}',
             discord.Color.gold()
         )

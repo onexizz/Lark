@@ -1,6 +1,20 @@
 """События сервера для логирования"""
 import discord
 from utils.logger import send_log
+from utils.role_manager import setup_new_member
+
+
+async def get_audit_info(guild, action_type, target_id=None, limit=5):
+    """Получение информации из аудит логов"""
+    try:
+        async for entry in guild.audit_logs(limit=limit, action=action_type):
+            if target_id and hasattr(entry.target, 'id') and entry.target.id != target_id:
+                continue
+            if entry.created_at.timestamp() > (discord.utils.utcnow().timestamp() - 300):  # Последние 5 минут
+                return entry.user, entry.reason or 'Причина не указана'
+    except Exception as e:
+        print(f"Ошибка при получении аудит логов: {e}")
+    return None, None
 
 
 def setup_server_events(bot):
@@ -9,9 +23,12 @@ def setup_server_events(bot):
     @bot.event
     async def on_member_join(member):
         """Лог входа участника"""
+        # Выдача роли заявителя новому участнику
+        await setup_new_member(member)
+        
         await send_log(
             member.guild,
-            f'➕ **Участник присоединился**\n{member.mention} ({member.name}#{member.discriminator})\nID: {member.id}\nАккаунт создан: <t:{int(member.created_at.timestamp())}:R>',
+            f'➕ **Участник присоединился**\n{member.mention} ({member.name}#{member.discriminator})\nID: {member.id}\nАккаунт создан: <t:{int(member.created_at.timestamp())}:R>\nВыдана роль заявителя',
             discord.Color.green()
         )
     
@@ -30,12 +47,27 @@ def setup_server_events(bot):
         if message.author.bot:
             return
         
-        content = message.content[:1000] if message.content else '*[Нет текста]*'
-        await send_log(
-            message.guild,
-            f'🗑️ **Сообщение удалено**\nАвтор: {message.author.mention}\nКанал: {message.channel.mention}\nСодержание: {content}',
-            discord.Color.dark_gray()
+        # Получение информации из аудит логов
+        moderator, reason = await get_audit_info(
+            message.guild, 
+            discord.AuditLogAction.message_delete,
+            message.id
         )
+        
+        content = message.content[:1000] if message.content else '*[Нет текста]*'
+        
+        if moderator:
+            await send_log(
+                message.guild,
+                f'🗑️ **Сообщение удалено**\nАвтор: {message.author.mention}\nКанал: {message.channel.mention}\nУдалил: {moderator.mention}\nПричина: {reason}\nСодержание: {content}',
+                discord.Color.dark_gray()
+            )
+        else:
+            await send_log(
+                message.guild,
+                f'🗑️ **Сообщение удалено**\nАвтор: {message.author.mention}\nКанал: {message.channel.mention}\nСодержание: {content}\n*Информация об удалившем недоступна*',
+                discord.Color.dark_gray()
+            )
     
     @bot.event
     async def on_message_edit(before, after):
@@ -55,84 +87,168 @@ def setup_server_events(bot):
     @bot.event
     async def on_member_ban(guild, user):
         """Лог бана участника"""
-        await send_log(
-            guild,
-            f'🔨 **Участник забанен**\n{user.mention} ({user.name}#{user.discriminator})\nID: {user.id}',
-            discord.Color.dark_red()
-        )
+        moderator, reason = await get_audit_info(guild, discord.AuditLogAction.ban, user.id)
+        
+        if moderator:
+            await send_log(
+                guild,
+                f'🔨 **Участник забанен**\nЗабанен: {user.mention} ({user.name}#{user.discriminator})\nID: {user.id}\nМодератор: {moderator.mention}\nПричина: {reason}',
+                discord.Color.dark_red()
+            )
+        else:
+            await send_log(
+                guild,
+                f'🔨 **Участник забанен**\nЗабанен: {user.mention} ({user.name}#{user.discriminator})\nID: {user.id}\n*Информация о модераторе недоступна*',
+                discord.Color.dark_red()
+            )
     
     @bot.event
     async def on_member_unban(guild, user):
         """Лог разбана участника"""
-        await send_log(
-            guild,
-            f'🔓 **Участник разбанен**\n{user.mention} ({user.name}#{user.discriminator})\nID: {user.id}',
-            discord.Color.green()
-        )
+        moderator, reason = await get_audit_info(guild, discord.AuditLogAction.unban, user.id)
+        
+        if moderator:
+            await send_log(
+                guild,
+                f'🔓 **Участник разбанен**\nРазбанен: {user.mention} ({user.name}#{user.discriminator})\nID: {user.id}\nМодератор: {moderator.mention}\nПричина: {reason}',
+                discord.Color.green()
+            )
+        else:
+            await send_log(
+                guild,
+                f'🔓 **Участник разбанен**\nРазбанен: {user.mention} ({user.name}#{user.discriminator})\nID: {user.id}\n*Информация о модераторе недоступна*',
+                discord.Color.green()
+            )
     
     @bot.event
     async def on_guild_role_create(role):
         """Лог создания роли"""
-        await send_log(
-            role.guild,
-            f'🎭 **Роль создана**\nНазвание: {role.mention}\nID: {role.id}\nЦвет: {role.color}',
-            discord.Color.green()
-        )
+        moderator, reason = await get_audit_info(role.guild, discord.AuditLogAction.role_create, role.id)
+        
+        if moderator:
+            await send_log(
+                role.guild,
+                f'🎭 **Роль создана**\nНазвание: {role.mention}\nID: {role.id}\nЦвет: {role.color}\nСоздал: {moderator.mention}\nПричина: {reason}',
+                discord.Color.green()
+            )
+        else:
+            await send_log(
+                role.guild,
+                f'🎭 **Роль создана**\nНазвание: {role.mention}\nID: {role.id}\nЦвет: {role.color}\n*Информация о создателе недоступна*',
+                discord.Color.green()
+            )
     
     @bot.event
     async def on_guild_role_delete(role):
         """Лог удаления роли"""
-        await send_log(
-            role.guild,
-            f'🎭 **Роль удалена**\nНазвание: {role.name}\nID: {role.id}',
-            discord.Color.red()
-        )
+        moderator, reason = await get_audit_info(role.guild, discord.AuditLogAction.role_delete, role.id)
+        
+        if moderator:
+            await send_log(
+                role.guild,
+                f'🎭 **Роль удалена**\nНазвание: {role.name}\nID: {role.id}\nУдалил: {moderator.mention}\nПричина: {reason}',
+                discord.Color.red()
+            )
+        else:
+            await send_log(
+                role.guild,
+                f'🎭 **Роль удалена**\nНазвание: {role.name}\nID: {role.id}\n*Информация об удалившем недоступна*',
+                discord.Color.red()
+            )
     
     @bot.event
     async def on_guild_channel_create(channel):
         """Лог создания канала"""
-        await send_log(
-            channel.guild,
-            f'📁 **Канал создан**\nНазвание: {channel.mention}\nТип: {channel.type}\nID: {channel.id}',
-            discord.Color.green()
-        )
+        moderator, reason = await get_audit_info(channel.guild, discord.AuditLogAction.channel_create, channel.id)
+        
+        if moderator:
+            await send_log(
+                channel.guild,
+                f'📁 **Канал создан**\nНазвание: {channel.mention}\nТип: {channel.type}\nID: {channel.id}\nСоздал: {moderator.mention}\nПричина: {reason}',
+                discord.Color.green()
+            )
+        else:
+            await send_log(
+                channel.guild,
+                f'📁 **Канал создан**\nНазвание: {channel.mention}\nТип: {channel.type}\nID: {channel.id}\n*Информация о создателе недоступна*',
+                discord.Color.green()
+            )
     
     @bot.event
     async def on_guild_channel_delete(channel):
         """Лог удаления канала"""
-        await send_log(
-            channel.guild,
-            f'📁 **Канал удален**\nНазвание: {channel.name}\nТип: {channel.type}\nID: {channel.id}',
-            discord.Color.red()
-        )
+        moderator, reason = await get_audit_info(channel.guild, discord.AuditLogAction.channel_delete, channel.id)
+        
+        if moderator:
+            await send_log(
+                channel.guild,
+                f'📁 **Канал удален**\nНазвание: {channel.name}\nТип: {channel.type}\nID: {channel.id}\nУдалил: {moderator.mention}\nПричина: {reason}',
+                discord.Color.red()
+            )
+        else:
+            await send_log(
+                channel.guild,
+                f'📁 **Канал удален**\nНазвание: {channel.name}\nТип: {channel.type}\nID: {channel.id}\n*Информация об удалившем недоступна*',
+                discord.Color.red()
+            )
     
     @bot.event
     async def on_member_update(before, after):
         """Лог изменения участника (роли, никнейм)"""
         if before.roles != after.roles:
-            added_roles = [role.mention for role in after.roles if role not in before.roles]
-            removed_roles = [role.mention for role in before.roles if role not in after.roles]
+            added_roles = [role for role in after.roles if role not in before.roles]
+            removed_roles = [role for role in before.roles if role not in after.roles]
             
             if added_roles:
-                await send_log(
-                    after.guild,
-                    f'➕ **Роли добавлены**\nУчастник: {after.mention}\nРоли: {", ".join(added_roles)}',
-                    discord.Color.green()
-                )
+                # Получение информации о том, кто добавил роли
+                moderator, reason = await get_audit_info(after.guild, discord.AuditLogAction.member_role_update, after.id)
+                
+                if moderator:
+                    await send_log(
+                        after.guild,
+                        f'➕ **Роли добавлены**\nУчастник: {after.mention}\nРоли: {", ".join([r.mention for r in added_roles])}\nМодератор: {moderator.mention}\nПричина: {reason}',
+                        discord.Color.green()
+                    )
+                else:
+                    await send_log(
+                        after.guild,
+                        f'➕ **Роли добавлены**\nУчастник: {after.mention}\nРоли: {", ".join([r.mention for r in added_roles])}\n*Информация о модераторе недоступна*',
+                        discord.Color.green()
+                    )
             
             if removed_roles:
-                await send_log(
-                    after.guild,
-                    f'➖ **Роли удалены**\nУчастник: {after.mention}\nРоли: {", ".join(removed_roles)}',
-                    discord.Color.orange()
-                )
+                # Получение информации о том, кто убрал роли
+                moderator, reason = await get_audit_info(after.guild, discord.AuditLogAction.member_role_update, after.id)
+                
+                if moderator:
+                    await send_log(
+                        after.guild,
+                        f'➖ **Роли удалены**\nУчастник: {after.mention}\nРоли: {", ".join([r.mention for r in removed_roles])}\nМодератор: {moderator.mention}\nПричина: {reason}',
+                        discord.Color.orange()
+                    )
+                else:
+                    await send_log(
+                        after.guild,
+                        f'➖ **Роли удалены**\nУчастник: {after.mention}\nРоли: {", ".join([r.mention for r in removed_roles])}\n*Информация о модераторе недоступна*',
+                        discord.Color.orange()
+                    )
         
         if before.nick != after.nick:
-            await send_log(
-                after.guild,
-                f'✏️ **Никнейм изменен**\nУчастник: {after.mention}\nБыло: {before.nick or "Нет"}\nСтало: {after.nick or "Нет"}',
-                discord.Color.blue()
-            )
+            # Получение информации о том, кто изменил никнейм
+            moderator, reason = await get_audit_info(after.guild, discord.AuditLogAction.member_update, after.id)
+            
+            if moderator:
+                await send_log(
+                    after.guild,
+                    f'✏️ **Никнейм изменен**\nУчастник: {after.mention}\nМодератор: {moderator.mention}\nБыло: {before.nick or "Нет"}\nСтало: {after.nick or "Нет"}\nПричина: {reason}',
+                    discord.Color.blue()
+                )
+            else:
+                await send_log(
+                    after.guild,
+                    f'✏️ **Никнейм изменен**\nУчастник: {after.mention}\nБыло: {before.nick or "Нет"}\nСтало: {after.nick or "Нет"}\n*Информация о модераторе недоступна*',
+                    discord.Color.blue()
+                )
     
     @bot.event
     async def on_voice_state_update(member, before, after):

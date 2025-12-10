@@ -26,7 +26,7 @@ def main():
     intents.guilds = True
     
     # Создание бота
-    bot = commands.Bot(command_prefix='l.', intents=intents)
+    bot = commands.Bot(command_prefix='l.', intents=intents, status=discord.Status.idle, activity=discord.Activity(type=discord.ActivityType.watching, name='majestic-rp.ru'))
     
     # Настройка команд
     setup_application_commands(bot)

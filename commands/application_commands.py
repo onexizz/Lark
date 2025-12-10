@@ -6,6 +6,7 @@ from datetime import datetime
 from utils.storage import get_application, update_application
 from utils.logger import send_log
 from models.application_button import ApplicationButton
+from utils.role_manager import give_accepted_roles, remove_applicant_role
 
 
 def setup_application_commands(bot):
@@ -62,7 +63,7 @@ def setup_application_commands(bot):
             user = await bot.fetch_user(app['user_id'])
             embed = discord.Embed(
                 title='✅ Заявка принята!',
-                description=f'Ваша заявка #{app_id} в семью была принята!',
+                description=f'Ваша заявка #{app_id} в семью была принята! Пожалуйста сделайте ник по форме ниже:\n\n`Имя Фамилия | OOC Имя`',
                 color=discord.Color.green(),
                 timestamp=datetime.utcnow()
             )
@@ -76,10 +77,19 @@ def setup_application_commands(bot):
         # Ответ в канал
         await ctx.send(f'✅ Заявка #{app_id} от пользователя <@{app["user_id"]}> принята!')
         
+        # Выдача ролей принятого и снятие роли заявителя
+        try:
+            member = ctx.guild.get_member(app['user_id'])
+            if member:
+                await give_accepted_roles(member)
+                await remove_applicant_role(member)
+        except Exception as e:
+            print(f"Ошибка при выдаче ролей: {e}")
+        
         # Лог
         await send_log(
             ctx.guild,
-            f'✅ **Заявка принята #{app_id}**\nПринял: {ctx.author.mention}\nПодавал: <@{app["user_id"]}>\nИмя: {app["full_name"]}',
+            f'✅ **Заявка принята #{app_id}**\nПринял: {ctx.author.mention}\nПодавал: <@{app["user_id"]}>\nИмя: {app["full_name"]}\nВыданы роли принятого и снята роль заявителя',
             discord.Color.green()
         )
     
