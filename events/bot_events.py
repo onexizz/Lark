@@ -69,10 +69,9 @@ def setup_bot_events(bot):
                 rules_channel = guild.get_channel(RULES_CHANNEL_ID)
                 if rules_channel:
                     embed = discord.Embed(
-                        title='📋 Правила сервера',
-                        description='Выберите категорию правил для просмотра:',
-                        color=discord.Color.purple()
+                        
                     )
+                    embed.set_image(url="http://talori.pis-pis.ru/img/yznat.png")
                     view = RulesButton()
                     await rules_channel.send(embed=embed, view=view)
                     print(f'Эмбед с правилами отправлен в канал {rules_channel.name}')
