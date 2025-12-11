@@ -11,32 +11,7 @@ from utils.role_manager import give_accepted_roles, remove_applicant_role
 
 def setup_application_commands(bot):
     """Настройка команд для работы с заявками"""
-    
-    @bot.tree.command(name='application_panel', description='Создать панель для подачи заявок')
-    @app_commands.default_permissions(administrator=True)
-    async def application_panel(interaction: discord.Interaction):
-        """Команда для создания панели заявок"""
-        embed = discord.Embed(
-            title='🏠 Заявка в семью',
-            description='Нажмите на кнопку ниже, чтобы подать заявку на вступление в семью.\n\n'
-                        '**Требования:**\n'
-                        '• Заполните все поля честно\n'
-                        '• Укажите реальную информацию\n'
-                        '• Дождитесь рассмотрения заявки',
-            color=discord.Color.blue()
-        )
-        embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else None)
-        
-        view = ApplicationButton()
-        await interaction.channel.send(embed=embed, view=view)
-        await interaction.response.send_message('✅ Панель заявок создана!', ephemeral=True)
-        
-        await send_log(
-            interaction.guild,
-            f'🔧 **Панель заявок создана**\nМодератор: {interaction.user.mention}\nКанал: {interaction.channel.mention}',
-            discord.Color.blue()
-        )
-    
+
     @bot.command(name='accept')
     @commands.has_permissions(manage_guild=True)
     async def accept_application(ctx, app_id: int):

@@ -1,7 +1,8 @@
 """События бота"""
 import discord
-from config.settings import PANEL_CHANNEL_ID
+from config.settings import PANEL_CHANNEL_ID, RULES_CHANNEL_ID
 from models.application_button import ApplicationButton
+from models.rules_button import RulesButton
 from utils.storage import load_applications
 from utils.logger import send_log
 
@@ -57,11 +58,26 @@ def setup_bot_events(bot):
                     # Лог о создании панели
                     await send_log(
                         guild,
-                        f'🔧 **Панель заявок автоматически создана**\nКанал: {panel_channel.mention}\nУдалено старых сообщений: {deleted}',
+                        f'🔧 **Панель заявок автоматически создана**\nМодератор: Автоматически\nКанал: {panel_channel.mention}',
                         discord.Color.blue()
                     )
             except Exception as e:
                 print(f'Ошибка при работе с каналом панели: {e}')
+
+            # Отправка эмбеда с правилами
+            try:
+                rules_channel = guild.get_channel(RULES_CHANNEL_ID)
+                if rules_channel:
+                    embed = discord.Embed(
+                        title='📋 Правила сервера',
+                        description='Выберите категорию правил для просмотра:',
+                        color=discord.Color.purple()
+                    )
+                    view = RulesButton()
+                    await rules_channel.send(embed=embed, view=view)
+                    print(f'Эмбед с правилами отправлен в канал {rules_channel.name}')
+            except Exception as e:
+                print(f'Ошибка при отправке эмбеда с правилами: {e}')
         
         # Логирование запуска
         for guild in bot.guilds:

@@ -1,7 +1,7 @@
 """Модальное окно для заявки в семью"""
 import discord
 from datetime import datetime
-from config.settings import APPLICATION_CHANNEL_ID
+from config.settings import APPLICATION_CHANNEL_ID, STATIC_CHANNEL_ID
 from utils.storage import get_next_app_id, add_application
 from utils.logger import send_log
 from utils.role_manager import set_applicant_nickname, give_applicant_role
@@ -18,7 +18,7 @@ class FamilyApplicationModal(discord.ui.Modal, title='Заявка в семью
     )
     
     passport = discord.ui.TextInput(
-        label='Номер паспорта',
+        label='Номер паспорта(Static)',
         placeholder='Введите номер паспорта...',
         required=True,
         max_length=50
@@ -39,6 +39,7 @@ class FamilyApplicationModal(discord.ui.Modal, title='Заявка в семью
         required=True,
         max_length=100
     )
+
 
     async def on_submit(self, interaction: discord.Interaction):
         app_id = get_next_app_id()
@@ -68,6 +69,12 @@ class FamilyApplicationModal(discord.ui.Modal, title='Заявка в семью
         embed.add_field(name='🎮 OOC Имя', value=self.ooc_name.value, inline=False)
         embed.set_footer(text=f'Заявка от {interaction.user.name}', icon_url=interaction.user.display_avatar.url)
         
+        static_id = interaction.guild.get_channel(STATIC_CHANNEL_ID)
+        if static_id:
+            await static_id.send(
+                content=f'Статический ID пользователя {interaction.user.mention} - {self.passport.value}'
+            )
+
         # Отправка в канал заявок
         app_channel = interaction.guild.get_channel(APPLICATION_CHANNEL_ID)
         if app_channel:
